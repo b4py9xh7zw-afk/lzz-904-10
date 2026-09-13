@@ -23,3 +23,8 @@ __pycache__/
 *.log
 .env
 .env.*
+
+# slowmo-previewer runtime
+config.json
+uploads/
+previews/

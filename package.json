@@ -1,0 +1,14 @@
+{
+  "name": "slowmo-previewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "运动视频慢动作预览器：上传视频，选择降速比例/补帧提示/清晰度/裁剪时间段，后端 ffmpeg 生成短预览",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run-tests.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

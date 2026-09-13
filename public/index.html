@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运动视频慢动作预览器</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🎬</span>
+    <div>
+      <h1>运动视频慢动作预览器</h1>
+      <p class="subtitle">上传动作视频 → 降速 / 补帧 / 裁剪 → 生成短预览</p>
+    </div>
+  </div>
+  <div id="ffmpegBadge" class="badge badge-unknown">ffmpeg 检测中…</div>
+</header>
+
+<main class="layout">
+  <!-- 左列：上传与参数 -->
+  <section class="panel">
+    <details class="settings" id="settingsBox">
+      <summary>⚙️ 设置（ffmpeg 路径，Win10 可配置）</summary>
+      <div class="settings-body">
+        <label>ffmpeg 路径
+          <input type="text" id="cfgFfmpeg" placeholder='Windows 示例: C:\ffmpeg\bin\ffmpeg.exe'>
+        </label>
+        <label>ffprobe 路径
+          <input type="text" id="cfgFfprobe" placeholder='Windows 示例: C:\ffmpeg\bin\ffprobe.exe'>
+        </label>
+        <div class="row gap">
+          <button id="btnSaveCfg" class="btn">保存并测试</button>
+          <button id="btnClear" class="btn btn-ghost" title="删除服务器上所有已生成的预览文件">清理预览文件</button>
+        </div>
+        <div id="cfgResult" class="cfg-result"></div>
+      </div>
+    </details>
+
+    <h2>1. 上传视频</h2>
+    <div id="dropZone" class="dropzone">
+      <input type="file" id="fileInput" accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.flv,.ts">
+      <p>点击选择或拖拽视频到此处</p>
+      <p class="hint" id="fileHint">支持 MP4 / MOV / AVI / MKV 等常见格式</p>
+    </div>
+    <video id="srcPlayer" class="src-player hidden" controls muted></video>
+    <div id="srcMeta" class="meta"></div>
+
+    <h2>2. 参数</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label>裁剪时间段（秒） <span class="hint" id="segHint"></span></label>
+        <div class="row gap">
+          <input type="number" id="startSec" min="0" step="0.1" value="0">
+          <span class="sep">→</span>
+          <input type="number" id="endSec" min="0" step="0.1" value="5">
+        </div>
+        <div class="row gap">
+          <button class="btn btn-mini" id="markStart">▶ 当前点设为开始</button>
+          <button class="btn btn-mini" id="markEnd">⏹ 当前点设为结束</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>降速比例：<b id="speedLabel">0.50×</b> <span class="hint" id="slowFactor"></span></label>
+        <input type="range" id="speed" min="0.1" max="1" step="0.05" value="0.5">
+        <div class="quick">
+          <button class="chip" data-speed="0.25">0.25×</button>
+          <button class="chip" data-speed="0.5">0.5×</button>
+          <button class="chip" data-speed="0.75">0.75×</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>补帧提示（帧插值，让慢放更顺滑）</label>
+        <div class="radios">
+          <label><input type="radio" name="interp" value="none" checked> 不补帧 <span class="hint">最快，可能有顿挫</span></label>
+          <label><input type="radio" name="interp" value="fast"> 快速 <span class="hint">bilog 运动估计</span></label>
+          <label><input type="radio" name="interp" value="balanced"> 均衡 <span class="hint">双向运动估计</span></label>
+          <label><input type="radio" name="interp" value="quality"> 高质量 <span class="hint">ESA+vsbmc，最慢</span></label>
+        </div>
+        <label class="inline">目标帧率
+          <input type="number" id="targetFps" min="1" max="240" placeholder="自动（源帧率）" class="w120">
+        </label>
+      </div>
+
+      <div class="field">
+        <label>清晰度</label>
+        <select id="resolution">
+          <option value="source">源分辨率</option>
+          <option value="1080">1080p</option>
+          <option value="720" selected>720p</option>
+          <option value="480">480p</option>
+        </select>
+        <label class="inline"><input type="checkbox" id="keepAudio" checked> 保留音频（同步变速）</label>
+      </div>
+    </div>
+
+    <div class="estimate" id="estimate"></div>
+    <button id="btnGo" class="btn btn-primary" disabled>生成慢动作预览</button>
+    <div id="progress" class="progress hidden">⏳ 正在处理… 已等待 <b id="elapsedNow">0.0</b>s（补帧较耗时，请耐心等待）</div>
+  </section>
+
+  <!-- 右列：结果 -->
+  <section class="panel" id="resultPanel">
+    <h2>3. 结果</h2>
+    <div id="resultEmpty" class="empty">尚未生成预览。上传视频并点击「生成慢动作预览」。</div>
+    <div id="resultBody" class="hidden">
+      <div id="statusBadge" class="badge"></div>
+
+      <h3>执行的命令</h3>
+      <div class="cmdbox">
+        <pre id="cmdText"></pre>
+        <button class="btn btn-mini copy" id="btnCopy">复制</button>
+      </div>
+
+      <h3>耗时</h3>
+      <p id="elapsedText" class="elapsed"></p>
+
+      <div id="errorBox" class="hidden">
+        <h3>错误摘要</h3>
+        <pre id="errorText" class="error"></pre>
+      </div>
+
+      <div id="warnBox" class="hidden">
+        <h3>提示</h3>
+        <ul id="warnList"></ul>
+      </div>
+
+      <div id="previewBox" class="hidden">
+        <h3>预览</h3>
+        <video id="previewPlayer" controls loop></video>
+        <p><a id="downloadLink" href="#" download>⬇ 下载预览 MP4</a> <span id="outputInfo" class="hint"></span></p>
+      </div>
+
+      <details class="stderr-box">
+        <summary>ffmpeg 输出尾部（调试用）</summary>
+        <pre id="stderrText"></pre>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  本地工具 · ffmpeg 路径见「设置」或 <code>config.json</code> · 预览文件默认保留 2 小时自动清理
+</footer>
+<script src="/app.js"></script>
+</body>
+</html>

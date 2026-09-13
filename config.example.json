@@ -1,0 +1,10 @@
+{
+  "ffmpegPath": "ffmpeg",
+  "ffprobePath": "ffprobe",
+  "host": "0.0.0.0",
+  "port": 8321,
+  "maxUploadMB": 300,
+  "maxSegmentSeconds": 15,
+  "jobTimeoutSeconds": 600,
+  "previewTtlMinutes": 120
+}
